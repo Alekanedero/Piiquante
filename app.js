@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const path = require("path");
 
-const stuffRoutes = require('./routes/stuff')
+const sauceRoutes = require('./routes/sauce')
 const userRoutes = require('./routes/user')
 
 // se connecter a Mongodb
@@ -30,7 +30,9 @@ app.use((req, res, next) => {
 
 
 app.use(bodyParser.json());
-app.use('/api/stuff', stuffRoutes);
+
 app.use('/api/auth', userRoutes);
+app.use('/api/sauce', sauceRoutes);
+
 
 module.exports = app;
