@@ -17,7 +17,7 @@ exports.getOneSauce = (req, res, next) => {
 
 // cette route sert a enregistrer un produit avec une image dans la base de donnée
 exports.createSauce = (req, res, next) => {
-  const sauceObject = JSON.parse(req.body.thing);
+  const sauceObject = JSON.parse(req.body.sauce);
   delete sauceObject._id;
   delete sauceObject._userId;
 
