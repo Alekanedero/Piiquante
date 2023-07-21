@@ -71,7 +71,7 @@ exports.modifySauce = (req, res, next) => {
     .then((sauce) => {
       // Vérifie si l'auteur de la sauce est bien la personne connectée
       if (sauce.userId != req.auth.userId) {
-        res.status(403).json({ message: "Requête non authorized" });
+        res.status(401).json({ message: "Requête non authorized" });
       } else {
         // On récupère le contenu du fichier image dans la requête 
         const testReqFile = req.file;
@@ -176,6 +176,3 @@ exports.likeSauce = (req, res, next) => {
       }
     })
 }
-
-
-// Définit le statut « Like » pour l' userId fourni. Si like = 1, l'utilisateur aime (= like) la sauce. Si like = 0, l'utilisateur annule son like ou son dislike. Si like = -1, l'utilisateur n'aime pas (= dislike) la sauce. L'ID de l'utilisateur doit être ajouté ou retiré du tableau approprié. Cela permet de garder une trace de leurs préférences et les empêche de liker ou de ne pas disliker la même sauce plusieurs fois : un utilisateur ne peut avoir qu'une seule valeur pour chaque sauce. Le nombre total de « Like » et de « Dislike » est mis à jour à chaque nouvelle notation.
