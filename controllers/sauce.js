@@ -17,15 +17,18 @@ exports.getOneSauce = (req, res, next) => {
 
 // cette route sert a enregistrer un produit avec une image dans la base de donnée
 exports.createSauce = (req, res, next) => {
+  // on parse car l'objet est envoyer en chaine charactère
   const sauceObject = JSON.parse(req.body.sauce);
+  // supr id car généré automatiquement par la base de donnée
   delete sauceObject._id;
+  // on supr userId car on ne fait pas confiance au client, on utilisera l'userId qui vient du token d'authentification
   delete sauceObject._userId;
   const sauce = new Sauce({
     ...sauceObject,
     userId: req.auth.userId,
     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`,
   });
-  sauce.save()
+  sauce.save()  //enregistre dans le base de donné
     .then(() => {
       res.status(201).json({ message: "Sauce enregistré !" });
     })
@@ -36,12 +39,14 @@ exports.createSauce = (req, res, next) => {
 
 // // cette route sert a effacer un produit
 exports.deleteSauce = (req, res, next) => {
+  //on récupère l'objet en base
   Sauce.findOne({ _id: req.params.id })
     .then((sauce) => {
+      //vérifie si c'ets bien le propriétaire l'objet qui demande la supression
       if (sauce.userId != req.auth.userId) {
         res.status(403).json({ message: "Requête Non-autorisé !" });
       } else {
-        // récupérer URL qui est enregistré, et recréer le system de chemin a partir de celle ci
+        // récupérer URL qui est enregistré, et recréer le chemin sur notre system de fichier a partir de celle-ci
         const filename = sauce.imageUrl.split("/images/")[1];
         // faire la supression avec la method unlink de fs
         fs.unlink(`images/${filename}`, () => {
@@ -60,16 +65,19 @@ exports.deleteSauce = (req, res, next) => {
 
 // cette route sert a mofidier un produit existant
 exports.modifySauce = (req, res, next) => {
+  //regarder s'il y a un chant file
   const sauceObject = req.file ? {
     ...JSON.parse(req.body.sauce),
     imageUrl: `${req.protocol}://${req.get("host")}/images/${req.file.filename}`
-  } : { ...req.body };
+  } : { ...req.body }; //si pas d'objet transmit, on récup l'objet dans le corp de la requette
 
+  //pour éviter que quelqu'un crée un objet a son nom, puis le modifie pour le réasigné a quelqun d'autre
   delete sauceObject._userId;
 
+  //récupère notre objet en base de donnée
   Sauce.findOne({ _id: req.params.id })
     .then((sauce) => {
-      // Vérifie si l'auteur de la sauce est bien la personne connectée
+      // Vérifie si l'userId en base est différent de l'userId du token
       if (sauce.userId != req.auth.userId) {
         res.status(401).json({ message: "Requête non authorized" });
       } else {
@@ -102,77 +110,100 @@ exports.modifySauce = (req, res, next) => {
 
 // Cette route sert à ajouter ou enlever un like
 exports.likeSauce = (req, res, next) => {
-  //  On récupère le sauceId
   const sauceId = req.params.id;
-  // On récupère l'userId
   const userId = req.auth.userId;
-  // On récupère le like de la requette body
   const like = req.body.like;
 
   Sauce.findOne({ _id: sauceId })
     .then((sauce) => {
-      // Vérifier si l'utilisateur a déjà aimé la sauce
+      // Vérifier si la sauce a été trouvée
+      if (!sauce) {
+        return res.status(404).json({ message: "Sauce non trouvée." });
+      }
+
+      // Vérifier si like est un nombre valide (1, 0 ou -1)
+      if (isNaN(like)) {
+        return res.status(400).json({ message: "Valeur 'like' invalide." });
+      }
+
+      // Vérifier si l'utilisateur a déjà aimé ou pas la sauce (voir si userId se trouve dans le tableau usersLiked)
       if (sauce.usersLiked.includes(userId)) {
-        // Si l'utilisateur a déjà aimé la sauce et like = 1, on ne fait rien
         if (like === 1) {
-          res.status(200).json({ message: "L'utilisateur a déjà aimé cette sauce." });
-        }
-        // Si l'utilisateur a déjà aimé la sauce et like = 0, on supprime son like
-        else if (like === 0) {
+          return res.status(200).json({ message: "L'utilisateur a déjà aimé cette sauce." });
+        } else if (like === 0) {
+          // Retirer le like de l'utilisateur et décrémenter le compteur de likes
           Sauce.updateOne(
             { _id: sauceId },
             { $pull: { usersLiked: userId }, $inc: { likes: -1 } }
           )
             .then(() => res.status(200).json({ message: "Like supprimé avec succès." }))
             .catch((error) => res.status(500).json({ error }));
-        }
-        // Si l'utilisateur a déjà aimé la sauce et like = -1, on supprime son like et ajoute son dislike
-        else if (like === -1) {
+        } else if (like === -1) {
+          // Retirer le like de l'utilisateur, ajouter son dislike et incrementer/décrémenter
           Sauce.updateOne(
             { _id: sauceId },
             {
-              // On supprime l'identifiant de l'utilisateur du tableau usersLiked de la sauce.
               $pull: { usersLiked: userId },
-              // On ajoute l'identifiant de l'utilisateur au tableau usersDisliked de la sauce.
               $push: { usersDisliked: userId },
-              // On décrémente le compteur likes de la sauce d'une unité et incrémente le compteur dislikes d'une unité.
               $inc: { likes: -1, dislikes: 1 },
             }
           )
             .then(() => res.status(200).json({ message: "Dislike ajouté avec succès." }))
             .catch((error) => res.status(500).json({ error }));
+        } else {
+          return res.status(400).json({ message: "Valeur 'like' invalide." });
         }
-        else {
-          res.status(400).json({ message: "Valeur 'like' invalide." });
+      } else if (sauce.usersDisliked.includes(userId)) {
+        if (like === -1) {
+          return res.status(200).json({ message: "L'utilisateur a déjà disliké cette sauce." });
+        } else if (like === 0) {
+          // Retirer le dislike de l'utilisateur et décrémenter le compteur de dislikes
+          Sauce.updateOne(
+            { _id: sauceId },
+            { $pull: { usersDisliked: userId }, $inc: { dislikes: -1 } }
+          )
+            .then(() => res.status(200).json({ message: "Dislike supprimé avec succès." }))
+            .catch((error) => res.status(500).json({ error }));
+        } else if (like === 1) {
+          // Retirer le dislike de l'utilisateur, ajouter son like et ajuster les compteurs
+          Sauce.updateOne(
+            { _id: sauceId },
+            {
+              $pull: { usersDisliked: userId },
+              $push: { usersLiked: userId },
+              $inc: { dislikes: -1, likes: 1 },
+            }
+          )
+            .then(() => res.status(200).json({ message: "Like ajouté avec succès." }))
+            .catch((error) => res.status(500).json({ error }));
+        } else {
+          return res.status(400).json({ message: "Valeur 'like' invalide." });
         }
-      }
-      // Si l'utilisateur n'a pas encore aimé la sauce
-      else {
-        // Si like = 1, on ajoute son like
+      } else {
+        // L'utilisateur n'a pas encore liké ou disliké la sauce
         if (like === 1) {
+          // Ajouter le like de l'utilisateur et incrémenter le compteur de likes
           Sauce.updateOne(
             { _id: sauceId },
             { $push: { usersLiked: userId }, $inc: { likes: 1 } }
           )
             .then(() => res.status(200).json({ message: "Like ajouté avec succès." }))
             .catch((error) => res.status(500).json({ error }));
-        }
-        // Si like = 0, on ne fait rien car l'utilisateur n'a pas encore aimé la sauce
-        else if (like === 0) {
-          res.status(200).json({ message: "L'utilisateur n'a pas encore aimé cette sauce." });
-        }
-        // Si like = -1, on ajoute son dislike
-        else if (like === -1) {
+        } else if (like === -1) {
+          // Ajouter le dislike de l'utilisateur et incrémenter le compteur de dislikes
           Sauce.updateOne(
             { _id: sauceId },
             { $push: { usersDisliked: userId }, $inc: { dislikes: 1 } }
           )
             .then(() => res.status(200).json({ message: "Dislike ajouté avec succès." }))
             .catch((error) => res.status(500).json({ error }));
-        }
-        else {
-          res.status(400).json({ message: "Valeur 'like' invalide." });
+        } else if (like === 0) {
+          // L'utilisateur n'a pas encore aimé ou disliké la sauce
+          return res.status(200).json({ message: "L'utilisateur n'a pas encore aimé ou disliké cette sauce." });
+        } else {
+          return res.status(400).json({ message: "Valeur 'like' invalide." });
         }
       }
     })
-}
+    .catch((error) => res.status(500).json({ error }));
+};

@@ -33,6 +33,8 @@ app.use(bodyParser.json());
 
 app.use('/api/auth', userRoutes);
 app.use('/api/sauces', sauceRoutes);
+
+//On récupère le repertoire dans lequel s'éxécute notre server et y concaténer le répertoire images pour obtenir le chemin complet sur le disque
 app.use('/images', express.static(path.join(__dirname, 'images')))
 
 

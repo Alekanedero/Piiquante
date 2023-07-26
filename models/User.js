@@ -8,6 +8,8 @@ const userSchema = mongoose.Schema({
     password: { type : String, required: true}
 });
 
+// On applique notre validateur a notre shema
 userSchema.plugin(uniqueValidator)
 
+// puis on fait de notre schema un model
 module.exports = mongoose.model('User', userSchema);
